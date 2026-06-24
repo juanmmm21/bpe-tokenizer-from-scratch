@@ -30,8 +30,10 @@ A diferencia de los enfoques basados en caracteres Unicode simples o tokens de p
 Dado que el proyecto está diseñado sin dependencias externas, únicamente se requiere un entorno de Python 3 activo.
 
 ### 1. Clonar e Inicializar
-El proyecto ya está inicializado localmente en su subcarpeta correspondiente del repositorio global:
+
+Clona este repositorio en tu máquina local y accede al directorio del proyecto:
 ```bash
+git clone https://github.com/juanmmm21/bpe-tokenizer-from-scratch.git
 cd bpe-tokenizer-from-scratch
 ```
 
