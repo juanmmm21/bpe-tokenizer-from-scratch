@@ -1,67 +1,98 @@
 # BPE Tokenizer from Scratch
 
-Este subproyecto forma parte de la infraestructura modular de Inteligencia Artificial ai-core-infra. Implementa un tokenizador Byte Pair Encoding (BPE) a nivel de bytes desarrollado íntegramente desde cero en Python, sin dependencias externas.
+Este subproyecto implementa un tokenizador Byte Pair Encoding (BPE) a nivel de bytes desarrollado integramente desde cero en Python, sin dependencias externas. Es el componente fundacional en el ciclo de procesamiento de lenguaje natural (PLN), encargado de traducir texto plano en una secuencia de identificadores numericos (tokens) que los modelos autorregresivos (como Transformers) pueden procesar y proyectar en su espacio de embeddings.
 
-El tokenizador es el componente fundacional en el ciclo de procesamiento de lenguaje natural (PLN), encargado de traducir texto plano en una secuencia de identificadores numéricos (tokens) que los modelos autoregresivos (como Transformers) pueden procesar y proyectar en su espacio de embeddings.
+## Arquitectura Tecnica y Fundamentos de BPE
 
----
+A diferencia de los enfoques basados en caracteres Unicode simples o tokens de palabras completas, este tokenizador implementa una aproximacion de nivel de bytes (Byte-Level BPE) inspirada en la utilizada en arquitecturas modernas como GPT-2 y Llama.
 
-## Arquitectura del Tokenizador
+### 1. Inicializacion del Vocabulario Base (256)
+El vocabulario se inicializa de forma inmutable con los 256 bytes posibles (0 a 255). Esto garantiza la representacion completa de cualquier flujo de texto plano, incluyendo caracteres especiales, acentos, emojis o secuencias Unicode no estandarizadas, sin generar nunca tokens fuera de vocabulario (<unk>).
+Para evitar problemas de procesamiento en cadenas con caracteres de control de terminal y espacios en blanco, los bytes se mapean de forma reversible a un rango de caracteres Unicode seguros e imprimibles.
 
-A diferencia de los enfoques basados en caracteres Unicode simples o tokens de palabras completas, este tokenizador implementa una aproximación de nivel de bytes (Byte-Level BPE) similar a la utilizada en arquitecturas modernas como GPT-2, GPT-4 y Llama:
+### 2. Pre-tokenizacion por Expresion Regular
+Antes de buscar fusiones de bytes, se aplica un filtro de expresiones regulares (con soporte Unicode) que segmenta el texto en palabras individuales, numeros y signos de puntuacion:
 
-1. **Vocabulario Base Inmutable (256):** El vocabulario se inicializa con los 256 bytes posibles (0 a 255). Esto garantiza que cualquier texto plano (incluyendo caracteres especiales, acentos, emojis o caracteres unicode corruptos) pueda representarse sin generar tokens fuera de vocabulario (<unk>).
-2. **Pre-tokenización Estricta:** Antes de buscar fusiones de bytes, se aplica un filtro de expresiones regulares (re con soporte Unicode) que segmenta el texto en palabras individuales, números y signos de puntuación. Esto evita que BPE fusione caracteres a través de límites semánticos (por ejemplo, unir el final de una palabra con un espacio o un signo de puntuación), lo cual generaría un vocabulario caótico y redundante.
-3. **Fusión Iterativa (Merges):** Durante la fase de entrenamiento, el algoritmo calcula las frecuencias de todos los pares de bytes/tokens consecutivos en el corpus estructurado. Se selecciona iterativamente el par más frecuente y se fusiona en un nuevo ID único de token. Este proceso continúa hasta alcanzar el tamaño objetivo (vocab_size).
-4. **Codificación Codiciosa (Greedy Encoding):** Para codificar un texto nuevo, se dividen los fragmentos mediante el patrón de pre-tokenización y se ejecutan las fusiones aprendidas respetando estrictamente el orden cronológico en el que fueron descubiertas durante el entrenamiento.
-5. **Decodificación Segura:** La decodificación simplemente concatena la representación en bytes de cada ID de token y realiza una decodificación UTF-8 robusta utilizando un método de reemplazo de errores para evitar fallos si el flujo de bytes es incompleto.
+```python
+# Patron de segmentacion estricto
+PATTERN = r"'s|'t|'re|'ve|'m|'ll|'d| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"
+```
 
----
+Esto evita que el algoritmo de BPE fusione caracteres a traves de limites semanticos importantes (por ejemplo, unir la ultima letra de una palabra con un espacio o un signo de puntuacion), lo cual generaria un vocabulario caotico y redundante.
 
-## Tecnologías Utilizadas
+### 3. Algoritmo de Aprendizaje de Fusiones (Training)
+Durante el entrenamiento, el algoritmo opera iterativamente sobre el corpus de entrada representado como secuencias de bytes:
 
-- **Python 3.10+** (Implementación con tipado estricto typing y sin librerías externas).
-- **Biblioteca Estándar:** re (para pre-tokenización Unicode), json (para serialización del modelo), unittest (para validación automatizada) y tempfile (para pruebas de persistencia).
+1. Se calculan las frecuencias de todos los pares de tokens consecutivos dentro de las palabras segmentadas.
+2. Se selecciona el par mas frecuente $(t_i, t_{j})$:
+   
+   $$(t_i, t_j) = \arg\max_{(x,y)} \text{freq}(x, y)$$
+   
+3. Se añade una nueva regla de fusion: $(t_i, t_j) \rightarrow t_{new}$.
+4. Se actualiza la secuencia sustituyendo todas las ocurrencias consecutivas de $t_i, t_j$ por $t_{new}$.
+5. El proceso se repite hasta que el tamano del vocabulario alcanza el limite preestablecido `vocab_size` o no quedan pares con frecuencia mayor que 1.
 
----
+### 4. Algoritmo de Codificacion (Encoding)
+Para codificar una cadena de texto de prueba:
+1. Se desglosa en palabras mediante el patron de pre-tokenizacion.
+2. Cada palabra se convierte en su representacion de bytes mapeados a caracteres seguros.
+3. Se aplican las reglas de fusion aprendidas de forma codiciosa (greedy), respetando estrictamente el orden cronologico de su creacion durante el entrenamiento.
+4. Se devuelven los IDs numericos correspondientes.
 
-## Instalación y Uso
+### 5. Decodificacion Segura (Decoding)
+La decodificacion recupera los bytes correspondientes a cada ID del vocabulario y los concatena en un arreglo binario. Posteriormente, se decodifica a UTF-8 utilizando la directiva de reemplazo de errores (`errors="replace"`) para mitigar excepciones ante secuencias truncadas.
 
-Dado que el proyecto está diseñado sin dependencias externas, únicamente se requiere un entorno de Python 3 activo.
+## Especificacion del Modelo (Esquema JSON)
 
-### 1. Clonar e Inicializar
+El modelo entrenado se persiste como un archivo JSON con la siguiente estructura:
 
-Clona este repositorio en tu máquina local y accede al directorio del proyecto:
+```json
+{
+  "vocab": {
+    "h": 104,
+    "o": 111,
+    "l": 108,
+    "a": 97,
+    "ho": 256,
+    "ol": 257,
+    "hola": 258
+  },
+  "merges": [
+    ["h", "o"],
+    ["o", "l"],
+    ["ho", "la"]
+  ]
+}
+```
+
+## Requisitos de Instalacion
+
+*   Python 3.10 o superior.
+*   Sin dependencias externas.
+
+## Guia de Ejecucion y Verificacion
+
+### 1. Iniciar Entorno y Clonar
 ```bash
 git clone https://github.com/juanmmm21/bpe-tokenizer-from-scratch.git
 cd bpe-tokenizer-from-scratch
 ```
 
-### 2. Ejecutar Ejemplo de Demostración
-Se incluye un archivo `example.py` que realiza un flujo completo interactivo:
-- Inicializa y muestra el tamaño del vocabulario base.
-- Entrena el tokenizador con un corpus rico en español.
-- Codifica un texto de prueba que contiene caracteres especiales y emojis.
-- Desglosa y explica qué caracteres representa cada token ID.
-- Realiza la decodificación y valida que sea idéntica al original.
-- Guarda el modelo a disco en formato JSON y lo carga en una nueva instancia para verificar la persistencia.
-
-Puedes ejecutarlo con:
-```bash
-python3 example.py
-```
-
-### 3. Ejecutar Pruebas Unitarias
-Para asegurar que no haya regresiones y que la implementación se mantenga robusta y correcta, ejecuta el arnés de pruebas:
+### 2. Ejecutar Pruebas Unitarias
+Para verificar la consistencia matematica (ej. propiedad de identidad: `decode(encode(text)) == text`), ejecute:
 ```bash
 python3 -m unittest test_tokenizer.py
 ```
 
----
+### 3. Ejecutar Demostracion
+Inicie el script de demostracion interactivo para ver la inicializacion, entrenamiento, codificacion de emojis e importacion/exportacion JSON del vocabulario:
+```bash
+python3 example.py
+```
 
-## Conexión con el Ecosistema ai-core-infra
+## Conectividad en el Ecosistema ai-core-infra
 
-Dentro del marco de la arquitectura global, bpe-tokenizer-from-scratch es la piedra angular del procesamiento de datos:
-- Los tokens numéricos generados por este módulo alimentarán directamente el [contrastive-embedding-trainer](https://github.com/juanmmm21/contrastive-embedding-trainer) para entrenar representaciones vectoriales densas.
-- El análisis estructural que realiza sirve de inspiración para el corte semántico en [semantic-chunking-engine](https://github.com/juanmmm21/semantic-chunking-engine).
-- La codificación y vocabulario salvados son consumidos posteriormente por los servidores de inferencia en [llm-inference-server](https://github.com/juanmmm21/llm-inference-server) para reconstruir y emitir las predicciones.
+El tokenizador `bpe-tokenizer-from-scratch` es la base del procesamiento de datos en la infraestructura:
+*   Sus IDs de tokens alimentan directamente a [contrastive-embedding-trainer](https://github.com/juanmmm21/contrastive-embedding-trainer) para el entrenamiento de embeddings siameses.
+*   Sirve de limite fisico max_tokens en [semantic-chunking-engine](https://github.com/juanmmm21/semantic-chunking-engine).
+*   El vocabulario y merges guardados son cargados por [llm-inference-server](https://github.com/juanmmm21/llm-inference-server) para la decodificacion de tokens en streaming.
