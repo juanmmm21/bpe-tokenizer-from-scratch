@@ -18,3 +18,8 @@ env/
 *.json
 *.model
 *.bin
+
+# Packaging
+build/
+dist/
+*.egg-info/

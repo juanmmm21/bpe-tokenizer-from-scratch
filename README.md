@@ -65,6 +65,28 @@ The trained model is persisted as a JSON file with the following structure:
 }
 ```
 
+## Using it as a package
+
+Since `0.1.0` the code lives in the `bpe_tokenizer_from_scratch` package and the repository is
+pip-installable, so other projects can depend on it instead of copying files
+or editing `sys.path`:
+
+```bash
+pip install "bpe-tokenizer-from-scratch @ git+https://github.com/juanmmm21/bpe-tokenizer-from-scratch.git@v0.1.0"
+```
+
+```python
+from bpe_tokenizer_from_scratch import BPETokenizer
+```
+
+The old top-level modules are kept as thin re-exports, so scripts that add
+this folder to `sys.path` keep working. This component imports no other
+ai-core component: they are combined in the `aicore` SDK of
+[ai-core-infra-hub](https://github.com/juanmmm21/ai-core-infra-hub), which
+passes collaborators (vector stores, encoders, tokenizers) in by injection.
+
+Development: `pip install -e ".[dev]"`, then `pytest` and `ruff check .`.
+
 ## Installation Requirements
 
 *   Python 3.10 or higher.

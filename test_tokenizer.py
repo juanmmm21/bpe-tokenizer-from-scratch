@@ -1,7 +1,7 @@
 import os
 import tempfile
 import unittest
-from tokenizer import BPETokenizer
+from bpe_tokenizer_from_scratch.tokenizer import BPETokenizer
 
 class TestBPETokenizer(unittest.TestCase):
     """
